@@ -1,0 +1,8 @@
+* text=auto
+
+*.cs text charset=utf-8
+*.json text charset=utf-8
+*.xml text charset=utf-8
+*.md text charset=utf-8
+*.txt text charset=utf-8
+*.csproj text charset=utf-8

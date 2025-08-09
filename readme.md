@@ -1,4 +1,4 @@
-# Account Service API
+﻿# Account Service API
 REST API для управления банковскими счетами с использованием .NET 9
 
 ## Функционал
