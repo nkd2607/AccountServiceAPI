@@ -1,2 +1,12 @@
 ﻿using AccountService.Models;
-namespace AccountService.Services.Interfaces; public interface IAccountStorageService { Account CreateAccount(Account account); Account? UpdateAccount(Account account); bool DeleteAccount(Guid id); Account? GetAccount(Guid id); IEnumerable<Account> GetAccounts(); }
+
+namespace AccountService.Services.Interfaces;
+
+public interface IAccountStorageService
+{
+    Account CreateAccount(Account account);
+    Account? UpdateAccount(Account account);
+    bool DeleteAccount(Guid id);
+    Account? GetAccount(Guid id);
+    IEnumerable<Account> GetAccounts();
+}

@@ -1,26 +1,55 @@
-version: '3.8'
 
 services:
+  hangfiredb:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: hangfiredb
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - hangfire_data:/var/lib/postgresql/data
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: accountdb
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
   keycloak:
     image: quay.io/keycloak/keycloak:24.0.2
     environment:
       KEYCLOAK_ADMIN: admin
       KEYCLOAK_ADMIN_PASSWORD: admin
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/accountdb
+      KC_DB_USERNAME: postgres
+      KC_DB_PASSWORD: postgres
     volumes:
       - ./keycloak-config:/opt/keycloak/data/import
     command: start-dev --import-realm
-    ports:
-      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
 
   api:
     build: 
-      context: .
+      context: ./src
       dockerfile: Dockerfile
     environment:
-      - ASPNETCORE_URLS: http://+:80
-      - ENABLE_SWAGGER=true
-    ports:
-      - "80:80"
+      - ASPNETCORE_URLS=http://+:80
+      - ConnectionStrings__DefaultConnection=Host=postgres;Port=5432;Database=accountdb;Username=postgres;Password=postgres
     depends_on:
+      postgres:
+        condition: service_healthy
       keycloak:
         condition: service_healthy
+
+volumes:
+  postgres_data:
