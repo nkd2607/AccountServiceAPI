@@ -3,5 +3,7 @@
 public enum TransactionType
 {
     Credit,
-    Debit
+    Debit,
+    Interest,
+    Transfer
 }

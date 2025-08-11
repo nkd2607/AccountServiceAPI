@@ -1,5 +1,7 @@
-﻿using AccountService.Features.Accounts.Commands;
+﻿using AccountService.Features.Accounts.AccrueInterest;
+using AccountService.Features.Accounts.Commands;
 using AccountService.Features.Accounts.Queries;
+using AccountService.Features.Accounts.TransferFunds;
 using AccountService.Features.Transactions.Commands;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
@@ -64,4 +66,25 @@ public class AccountsController(IMediator mediator) : ControllerBase
                 new { transactionId = result.Value.Id }, result.Value);
         return StatusCode(result.StatusCode, new { error = result.Error });
     }
+    [HttpPost("{accountId}/accrue-interest")]
+    public async Task<IActionResult> AccrueInterest(Guid accountId)
+    {
+        await mediator.Send(new AccrueInterestCommand(accountId));
+        return Accepted();
+    }
+    [HttpPost("transfer")]
+    public async Task<IActionResult> TransferFunds(
+        [FromBody] TransferFundsRequest request)
+    {
+        await mediator.Send(new TransferFundsCommand(
+            request.FromAccountId,
+            request.ToAccountId,
+            request.Amount));
+        return Accepted();
+    }
+
+    public record TransferFundsRequest(
+        Guid FromAccountId,
+        Guid ToAccountId,
+        decimal Amount);
 }
