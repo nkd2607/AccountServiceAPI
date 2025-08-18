@@ -53,7 +53,7 @@ public class UpdateAccountHandler(
             account.InterestRate = request.InterestRate;
             account.ClosingDate = request.ClosingDate;
 
-            var updatedAccount = storage.UpdateAccount(account);
+            Account? updatedAccount = storage.UpdateAccount(account);
             return Task.FromResult(Result<Account>.Success(updatedAccount!));
         }
         catch (DbUpdateConcurrencyException ex)

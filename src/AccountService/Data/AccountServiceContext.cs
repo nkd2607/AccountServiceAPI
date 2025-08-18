@@ -1,3 +1,4 @@
+using AccountService.Domain.Outbox;
 using AccountService.Models;
 using Microsoft.EntityFrameworkCore;
 
@@ -7,6 +8,7 @@ public class AccountServiceContext(DbContextOptions<AccountServiceContext> optio
 {
     public DbSet<Account> Accounts => Set<Account>();
     public DbSet<Transaction> Transactions => Set<Transaction>();
+    public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

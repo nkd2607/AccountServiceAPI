@@ -1,12 +1,16 @@
 using AccountService.Data;
+using AccountService.Domain.Events;
+using AccountService.Infrastructure.Outbox;
+using AccountService.Models;
+using AccountService.Results;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
 namespace AccountService.Features.Accounts.AccrueInterest;
 
-public class AccrueInterestCommandHandler(AccountServiceContext context) : IRequestHandler<AccrueInterestCommand>
+public class AccrueInterestCommandHandler(AccountServiceContext context, OutboxService outbox) : IRequestHandler<AccrueInterestCommand, Result<Account>>
 {
-    public async Task Handle(AccrueInterestCommand request, CancellationToken ct)
+    public async Task<Result<Account>> Handle(AccrueInterestCommand request, CancellationToken ct)
     {
         await using var transaction = await context.Database.BeginTransactionAsync(ct);
 
@@ -28,5 +32,16 @@ public class AccrueInterestCommandHandler(AccountServiceContext context) : IRequ
             await transaction.RollbackAsync(ct);
             throw;
         }
+        var evt = new InterestAccrued(
+            Guid.NewGuid(),
+            DateTime.UtcNow,
+            request.AccountId,
+            request.PeriodFrom,
+            request.PeriodTo,
+            request.Amount
+        );
+
+        await outbox.AddAsync(evt, ct);
+        return null!;
     }
 }
