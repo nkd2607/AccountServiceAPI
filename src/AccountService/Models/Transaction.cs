@@ -1,4 +1,5 @@
 ﻿using AccountService.Models.Enums;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace AccountService.Models;
 
@@ -48,4 +49,7 @@ public class Transaction
     ///     Дата произведения транзакции
     /// </summary>
     public DateTime DateTime { get; set; }
+
+    [Column("xmin", TypeName = "xid")]
+    public uint Version { get; set; }
 }

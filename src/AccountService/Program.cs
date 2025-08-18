@@ -1,21 +1,37 @@
 ﻿using AccountService.Behaviors;
+using AccountService.Data;
+using AccountService.Exceptions;
 using AccountService.Filters;
 using AccountService.Results;
 using AccountService.Services.Interfaces;
 using AccountService.Services.Methods;
 using FluentValidation;
+using Hangfire;
 using MediatR;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc.Authorization;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using Swashbuckle.AspNetCore.SwaggerGen;
 using System.Reflection;
+using System.Text.Json;
 using System.Text.Json.Serialization;
+using Hangfire.PostgreSql;
 
 ValidatorOptions.Global.DefaultRuleLevelCascadeMode = CascadeMode.Stop;
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllers(options => { options.Filters.Add(new AuthorizeFilter()); });
+builder.Services.AddHangfire(config => config
+    .SetDataCompatibilityLevel(CompatibilityLevel.Version_180)
+    .UseSimpleAssemblyNameTypeSerializer()
+    .UseRecommendedSerializerSettings()
+    .UsePostgreSqlStorage(options => options
+        .UseNpgsqlConnection(builder.Configuration.GetConnectionString("HangfireConnection"))));
+
+builder.Services.AddHangfireServer();
+builder.Services.AddDbContext<AccountServiceContext>(options => options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer(options =>
 {
     options.Authority = "http://keycloak:8080/realms/accountservice";
@@ -34,8 +50,7 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowAll", policy => { policy.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader(); });
 });
-builder.Services.AddControllers()
-    .AddJsonOptions(options => options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
+builder.Services.AddControllers().AddJsonOptions(options => options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
@@ -75,6 +90,41 @@ if (app.Environment.IsDevelopment())
     });
 }
 
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<AccountServiceContext>();
+    db.Database.Migrate();
+}
+app.UseExceptionHandler(exceptionHandlerApp =>
+{
+    exceptionHandlerApp.Run(async context =>
+    {
+        context.Response.ContentType = "application/json";
+        var exception = context.Features.Get<IExceptionHandlerFeature>()?.Error;
+
+        if (exception is ConcurrencyException)
+        {
+            context.Response.StatusCode = StatusCodes.Status409Conflict;
+            await context.Response.WriteAsync(JsonSerializer.Serialize(new
+            {
+                Type = "ConcurrencyConflict",
+                Title = "Concurrency Error",
+                Detail = exception.Message,
+                Status = StatusCodes.Status409Conflict
+            }));
+        }
+    });
+});
+
+RecurringJob.AddOrUpdate<InterestAccrualService>(
+    "daily-interest-accrual",
+    service => service.AccrueInterestForAllAccounts(),
+    Cron.Daily(3, 0),
+    new RecurringJobOptions
+    {
+        TimeZone = TimeZoneInfo.Utc
+    });
+
 app.UseRouting();
 app.UseAuthentication();
 app.UseHttpsRedirection();
@@ -82,6 +132,7 @@ app.UseCors("AllowAll");
 app.UseAuthorization();
 app.MapControllers();
 app.Run();
+
 
 public class EnumTypesSchemaFilter : ISchemaFilter
 {
