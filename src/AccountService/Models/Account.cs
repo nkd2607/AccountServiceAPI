@@ -61,7 +61,9 @@ public class Account
     ///     Список транзакций, связанных со счётом
     /// </summary>
     public List<Transaction> Transactions { get; set; } = [];
-    
+
+    public bool Frozen { get; set; } = false;
+
     [Column("xmin", TypeName = "xid")]
     public uint Version { get; set; } 
 }

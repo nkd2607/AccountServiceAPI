@@ -66,12 +66,6 @@ public class AccountsController(IMediator mediator) : ControllerBase
                 new { transactionId = result.Value.Id }, result.Value);
         return StatusCode(result.StatusCode, new { error = result.Error });
     }
-    [HttpPost("{accountId}/accrue-interest")]
-    public async Task<IActionResult> AccrueInterest(Guid accountId)
-    {
-        await mediator.Send(new AccrueInterestCommand(accountId));
-        return Accepted();
-    }
     [HttpPost("transfer")]
     public async Task<IActionResult> TransferFunds(
         [FromBody] TransferFundsRequest request)
@@ -82,7 +76,17 @@ public class AccountsController(IMediator mediator) : ControllerBase
             request.Amount));
         return Accepted();
     }
+    [HttpPost("{accountId:guid}/accrue-interest")]
+    public async Task<IActionResult> AccrueInterest(Guid accountId, [FromBody] AccrueInterestRequest request)
+    {
+        if (request.Amount <= 0) return BadRequest(new { error = "Amount must be > 0" });
+        if (request.PeriodTo <= request.PeriodFrom) return BadRequest(new { error = "PeriodTo must be after PeriodFrom" });
 
+        var cmd = new AccrueInterestCommand(accountId, request.PeriodFrom, request.PeriodTo, request.Amount);
+        var result = await mediator.Send(cmd);
+        return result.IsSuccess ? Accepted() : StatusCode(result.StatusCode, new { error = result.Error });
+    }
+    public record AccrueInterestRequest(DateTime PeriodFrom, DateTime PeriodTo, decimal Amount);
     public record TransferFundsRequest(
         Guid FromAccountId,
         Guid ToAccountId,

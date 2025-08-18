@@ -2,11 +2,14 @@
 using AccountService.Data;
 using AccountService.Exceptions;
 using AccountService.Filters;
+using AccountService.Infrastructure.Messaging;
+using AccountService.Infrastructure.Outbox;
 using AccountService.Results;
 using AccountService.Services.Interfaces;
 using AccountService.Services.Methods;
 using FluentValidation;
 using Hangfire;
+using Hangfire.PostgreSql;
 using MediatR;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Diagnostics;
@@ -18,10 +21,14 @@ using Swashbuckle.AspNetCore.SwaggerGen;
 using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using Hangfire.PostgreSql;
+using AccountService.Infrastructure.Logging;
 
 ValidatorOptions.Global.DefaultRuleLevelCascadeMode = CascadeMode.Stop;
 var builder = WebApplication.CreateBuilder(args);
+builder.Services.AddSingleton<RabbitMqConnection>();
+builder.Services.AddSingleton<EventPublisher>();
+builder.Services.AddScoped<OutboxService>();
+builder.Services.AddHostedService<OutboxPublisher>();
 builder.Services.AddControllers(options => { options.Filters.Add(new AuthorizeFilter()); });
 builder.Services.AddHangfire(config => config
     .SetDataCompatibilityLevel(CompatibilityLevel.Version_180)
@@ -68,6 +75,7 @@ builder.Services.AddSwaggerGen(c =>
     {
         c.IncludeXmlComments(xmlPath);
         c.SchemaFilter<EnumTypesSchemaFilter>(xmlPath);
+        c.DocumentFilter<RabbitMqEventsDocumentFilter>();
     }
 
     c.SchemaFilter<ResultSchemaFilter>();
@@ -80,6 +88,9 @@ builder.Services.AddSingleton<IClientVerificationService, ClientVerificationServ
 builder.Services.AddSingleton<ICurrencyService, CurrencyService>();
 builder.Services.AddScoped<ValidationFilter>();
 var app = builder.Build();
+app.UseMiddleware<CorrelationIdMiddleware>();
+app.UseMiddleware<HttpLoggingMiddleware>();
+
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -131,6 +142,10 @@ app.UseHttpsRedirection();
 app.UseCors("AllowAll");
 app.UseAuthorization();
 app.MapControllers();
+
+app.MapHealthChecks("/health/live").AllowAnonymous();
+app.MapHealthChecks("/health/ready").AllowAnonymous();
+
 app.Run();
 
 

@@ -1,4 +1,6 @@
-﻿using AccountService.Models;
+﻿using AccountService.Domain.Events;        
+using AccountService.Infrastructure.Outbox;
+using AccountService.Models;
 using AccountService.Models.Enums;
 using AccountService.Results;
 using AccountService.Services.Interfaces;
@@ -12,16 +14,21 @@ public record CreateAccountCommand(Guid OwnerId, AccountType Type, string Curren
 public class CreateAccountHandler(
     IAccountStorageService storage,
     IClientVerificationService clientVerification,
-    ICurrencyService currencyService) : IRequestHandler<CreateAccountCommand, Result<Account>>
+    ICurrencyService currencyService,
+    OutboxService outbox)
+    : IRequestHandler<CreateAccountCommand, Result<Account>>
 {
-    public Task<Result<Account>> Handle(CreateAccountCommand request, CancellationToken token)
+    public async Task<Result<Account>> Handle(CreateAccountCommand request, CancellationToken token)
     {
         if (!clientVerification.VerifyClientExists(request.OwnerId))
-            return Task.FromResult(Result<Account>.Failure("Клиент не найден", 404));
+            return Result<Account>.Failure("Счёт не найден", 404);
+
         if (!currencyService.IsCurrencySupported(request.Currency))
-            return Task.FromResult(Result<Account>.Failure("Валюта не поддерживается"));
+            return Result<Account>.Failure("Валюта не поддерживается");
+
         if (request.Type != AccountType.Checking && request.InterestRate == null)
-            return Task.FromResult(Result<Account>.Failure("Для счетов кредитов/вкладов необходима процентная ставка"));
+            return Result<Account>.Failure("Необходима процентная ставка");
+
         var account = new Account
         {
             OwnerId = request.OwnerId,
@@ -31,7 +38,20 @@ public class CreateAccountHandler(
             InterestRate = request.InterestRate,
             OpeningDate = DateTime.UtcNow
         };
+
         var createdAccount = storage.CreateAccount(account);
-        return Task.FromResult(Result<Account>.Success(createdAccount, 201));
+
+        var evt = new AccountOpened(
+            Guid.NewGuid(),          
+            DateTime.UtcNow,           
+            createdAccount.Id,         
+            createdAccount.OwnerId,    
+            createdAccount.Currency,   
+            createdAccount.Type.ToString() 
+        );
+
+        await outbox.AddAsync(evt, token);
+
+        return Result<Account>.Success(createdAccount, 201);
     }
 }

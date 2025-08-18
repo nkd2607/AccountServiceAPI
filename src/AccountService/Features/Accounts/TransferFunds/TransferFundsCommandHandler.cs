@@ -51,10 +51,10 @@ public class TransferFundsCommandHandler(
         try
         {
             var fromAccount = await LockAccount(request.FromAccountId, ct)
-                ?? throw new ApplicationException("Source account not found");
+                ?? throw new ApplicationException("Счёт-отправитель не найден");
 
             var toAccount = await LockAccount(request.ToAccountId, ct)
-                ?? throw new ApplicationException("Target account not found");
+                ?? throw new ApplicationException("Счёт-получатель не найден");
 
             ValidateTransfer(fromAccount, toAccount, request.Amount);
 
@@ -122,16 +122,16 @@ public class TransferFundsCommandHandler(
     private void ValidateTransfer(Account from, Account to, decimal amount)
     {
         if (from.Currency != to.Currency)
-            throw new ApplicationException("Currency mismatch");
+            throw new ApplicationException("Несовпадение валют");
 
         if (from.Balance < amount)
-            throw new ApplicationException("Insufficient funds");
+            throw new ApplicationException("Недостаточно средств");
 
         if (from.ClosingDate.HasValue || to.ClosingDate.HasValue)
-            throw new ApplicationException("Account is closed");
+            throw new ApplicationException("Счёт закрыт");
 
         if (amount <= 0)
-            throw new ApplicationException("Invalid transfer amount");
+            throw new ApplicationException("Неверная сумма перевода");
     }
 
     private async Task VerifyBalances(Guid fromAccountId,
